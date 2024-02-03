@@ -1,13 +1,13 @@
 from .airsim_env import AirSimDroneEnv, TestEnv
-from gym.envs.registration import register
+import gymnasium as gym
+
+# Register AirSim environment as a gym environment
+gym.register(
+    id='airsim-env-v0',
+    entry_point='scripts:AirSimDroneEnv')
 
 
 # Register AirSim environment as a gym environment
-register(
-    id="airsim-env-v0", entry_point="scripts:AirSimDroneEnv",
-)
-
-# Register AirSim environment as a gym environment
-register(
-    id="test-env-v0", entry_point="scripts:TestEnv",
-)
+gym.register(
+    id='test-env-v0',
+    entry_point='scripts:TestEnv')

@@ -1,5 +1,5 @@
 from . import airsim
-import gym
+import gymnasium as gym
 import numpy as np
 
 
@@ -22,12 +22,12 @@ class AirSimDroneEnv(gym.Env):
         self.do_action(action)
         obs, info = self.get_obs()
         reward, done = self.compute_reward()
-        return obs, reward, done, info
+        return obs, reward, done, False, info
 
-    def reset(self):
+    def reset(self, seed=None, options = None):
         self.setup_flight()
         obs, _ = self.get_obs()
-        return obs
+        return obs, _
 
     def render(self):
         return self.get_obs()
@@ -95,7 +95,7 @@ class AirSimDroneEnv(gym.Env):
 
     def compute_reward(self):
         reward = 0
-        done = 0
+        done = False
 
         # Target distance based reward
         x,y,z = self.drone.simGetVehiclePose().position
@@ -120,12 +120,12 @@ class AirSimDroneEnv(gym.Env):
         # Collision penalty
         if self.is_collision():
             reward = -100
-            done = 1
+            done = True
 
         # Check if agent passed through the hole
         elif agent_traveled_x > 3.7:
             reward += 10
-            done = 1
+            done = True
 
         # Check if the hole disappeared from camera frame
         # (target_dist_curr-0.3) : distance between agent and hole's end point
@@ -134,7 +134,7 @@ class AirSimDroneEnv(gym.Env):
         # FOV : 120 deg, sin(60) ~ 1.732 
         elif (target_dist_curr-0.3) > (3.7-agent_traveled_x)*1.732:
             reward = -100
-            done = 1
+            done = True
 
         return reward, done
 
@@ -181,12 +181,12 @@ class TestEnv(AirSimDroneEnv):
         
     def compute_reward(self):
         reward = 0
-        done = 0
+        done = False
 
         x,_,_ = self.drone.simGetVehiclePose().position
 
         if self.is_collision():
-            done = 1
+            done = True
             self.agent_traveled.append(x)
     
         if done and self.eps_n % 5 == 0:
