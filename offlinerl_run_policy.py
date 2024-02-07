@@ -1,6 +1,6 @@
 import gymnasium as gym
 import yaml
-
+import d3rlpy
 from stable_baselines3 import PPO
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.vec_env import DummyVecEnv, VecTransposeImage
@@ -22,18 +22,9 @@ env = DummyVecEnv([lambda: Monitor(
         )
 )])
 
-# Load an existing model
-model = PPO.load(env=env, path="saved_policy\ppo_navigation_policy")
+model = d3rlpy.load_learnable("./saved_policy/offline_model.d3")
 
-# Run the trained policy
 obs = env.reset()
 for i in range(1000):
-    action, _ = model.predict(obs, deterministic=True)
+    action = model.predict(obs)
     obs, _, dones, info = env.step(action)
-    
-    # print(obs.shape)
-    # new_obs = obs.squeeze(0)
-    # new_obs = np.transpose(new_obs, (1,2,0))
-    # plt.imshow(new_obs)
-    # plt.show()
-    

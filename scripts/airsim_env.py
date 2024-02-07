@@ -11,9 +11,7 @@ class AirSimDroneEnv(gym.Env):
         self.drone = airsim.MultirotorClient(ip=ip_address)
         self.observation_space = gym.spaces.Box(low=0, high=255, shape=self.image_shape, dtype=np.uint8)
         self.action_space = gym.spaces.Discrete(9)
-
-        self.info = {"collision": False}
-
+        self.info = {}
         self.collision_time = 0
         self.random_start = True
         self.setup_flight()
@@ -21,11 +19,13 @@ class AirSimDroneEnv(gym.Env):
     def step(self, action):
         self.do_action(action)
         obs, info = self.get_obs()
+
         reward, done = self.compute_reward()
         return obs, reward, done, False, info
 
     def reset(self, seed=None, options = None):
         self.setup_flight()
+        self.info = {"collision": False, "successfull" : False}
         obs, _ = self.get_obs()
         return obs, _
 
@@ -54,7 +54,7 @@ class AirSimDroneEnv(gym.Env):
         self.target_pos = section["target"]
 
         # Start the agent at random section at a random yz position
-        y_pos, z_pos = ((np.random.rand(1,2)-0.5)*2).squeeze()
+        y_pos, z_pos = ((np.random.rand(1,2)-0.5)*3).squeeze()
         pose = airsim.Pose(airsim.Vector3r(self.agent_start_pos,y_pos,z_pos))
         self.drone.simSetVehiclePose(pose=pose, ignore_collision=True)
         
@@ -91,6 +91,7 @@ class AirSimDroneEnv(gym.Env):
     def get_obs(self):
         self.info["collision"] = self.is_collision()
         obs = self.get_rgb_image()
+        
         return obs, self.info
 
     def compute_reward(self):
@@ -126,7 +127,7 @@ class AirSimDroneEnv(gym.Env):
         elif agent_traveled_x > 3.7:
             reward += 10
             done = True
-
+            self.info['successfull'] = True
         # Check if the hole disappeared from camera frame
         # (target_dist_curr-0.3) : distance between agent and hole's end point
         # (3.7-agent_traveled_x) : distance between agent and wall
@@ -147,7 +148,8 @@ class AirSimDroneEnv(gym.Env):
         responses = self.drone.simGetImages([rgb_image_request])
         img1d = np.fromstring(responses[0].image_data_uint8, dtype=np.uint8)
         img2d = np.reshape(img1d, (responses[0].height, responses[0].width, 3)) 
-
+        
+        img2d = np.transpose(img2d, (2,0,1))
         # Sometimes no image returns from api
         try:
             return img2d.reshape(self.image_shape)
@@ -187,6 +189,87 @@ class TestEnv(AirSimDroneEnv):
 
         if self.is_collision():
             done = True
+            self.agent_traveled.append(x)
+    
+        if done and self.eps_n % 5 == 0:
+            print("---------------------------------")
+            print("> Total episodes:", self.eps_n)
+            print("> Flight distance (mean): %.2f" % (np.mean(self.agent_traveled)))
+            print("> Holes reached (max):", int(np.max(self.agent_traveled)//4))
+            print("> Holes reached (mean):", int(np.mean(self.agent_traveled)//4))
+            print("---------------------------------\n")
+        
+        return reward, done
+    
+class DataCollectEnv(AirSimDroneEnv):
+    def __init__(self, ip_address, image_shape, env_config):
+        self.eps_n = 0
+        super(DataCollectEnv, self).__init__(ip_address, image_shape, env_config)
+        self.agent_traveled = []
+
+        self.observations = []
+        self.actions = []
+        self.rewards = []
+        self.terminals = []
+
+    def step(self, action):
+        self.do_action(action)
+        obs, info = self.get_obs()
+        reward, done = self.compute_reward()
+        return obs, reward, done, info
+    
+    def compute_reward(self):
+        reward = 0
+        done = 0
+
+        # Target distance based reward
+        x,y,z = self.drone.simGetVehiclePose().position
+        target_dist_curr = np.linalg.norm(np.array([y,-z]) - self.target_pos)
+        reward += (self.target_dist_prev - target_dist_curr)*20
+
+        self.target_dist_prev = target_dist_curr
+
+        # Get meters agent traveled
+        agent_traveled_x = np.abs(self.agent_start_pos - x)
+
+        # Alignment reward
+        if target_dist_curr < 0.30:
+            reward += 12
+            # Alignment becomes more important when agent is close to the hole 
+            if agent_traveled_x > 2.9:
+                reward += 7
+
+        elif target_dist_curr < 0.45:
+            reward += 7
+
+        # Collision penalty
+        if self.is_collision():
+            reward = -100
+            done = 1
+
+        # Check if agent passed through the hole
+        elif agent_traveled_x > 3.7:
+            reward += 10
+            done = 1
+
+        # Check if the hole disappeared from camera frame
+        # (target_dist_curr-0.3) : distance between agent and hole's end point
+        # (3.7-agent_traveled_x) : distance between agent and wall
+        # (3.7-agent_traveled_x)*sin(60) : end points that camera can capture
+        # FOV : 120 deg, sin(60) ~ 1.732 
+        elif (target_dist_curr-0.3) > (3.7-agent_traveled_x)*1.732:
+            reward = -100
+            done = 1
+
+        return reward, done
+    def compute_reward(self):
+        reward = 0
+        done = 0
+
+        x,_,_ = self.drone.simGetVehiclePose().position
+
+        if self.is_collision():
+            done = 1
             self.agent_traveled.append(x)
     
         if done and self.eps_n % 5 == 0:

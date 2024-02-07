@@ -23,12 +23,9 @@ with open('scripts/config.yml', 'r') as f:
 env = DummyVecEnv([lambda: Monitor(
     gym.make("airsim-env-v0",
         ip_address="127.0.0.1", 
-        image_shape=(50,50,3),
+        image_shape=(3,50,50),
         env_config=env_config["TrainEnv"])
 )])
-
-# Wrap env as VecTransposeImage (Channel last to channel first)
-env = VecTransposeImage(env)
 
 
 class CustomCNN(BaseFeaturesExtractor):
