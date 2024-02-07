@@ -2,3 +2,6 @@ tb_logs
 
 scripts/__pycache__
 scripts/airsim/__pycache__
+
+d3rlpy_data
+d3rlpy_logs
