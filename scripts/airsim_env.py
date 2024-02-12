@@ -27,6 +27,7 @@ class AirSimDroneEnv(gym.Env):
     def reset(self):
         self.setup_flight()
         obs, _ = self.get_obs()
+        self.info = {"collision": False, "successfull" : False}
         return obs
 
     def render(self):
@@ -54,7 +55,7 @@ class AirSimDroneEnv(gym.Env):
         self.target_pos = section["target"]
 
         # Start the agent at random section at a random yz position
-        y_pos, z_pos = ((np.random.rand(1,2)-0.5)*2).squeeze()
+        y_pos, z_pos = ((np.random.rand(1,2)-0.5)*3).squeeze()
         pose = airsim.Pose(airsim.Vector3r(self.agent_start_pos,y_pos,z_pos))
         self.drone.simSetVehiclePose(pose=pose, ignore_collision=True)
         
@@ -125,6 +126,7 @@ class AirSimDroneEnv(gym.Env):
         # Check if agent passed through the hole
         elif agent_traveled_x > 3.7:
             reward += 10
+            self.info['successfull'] = True
             done = 1
 
         # Check if the hole disappeared from camera frame
